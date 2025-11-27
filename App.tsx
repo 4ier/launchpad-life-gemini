@@ -2,23 +2,29 @@
 import React, { useState, useEffect } from 'react';
 import { Launchpad } from './components/Launchpad';
 import { useGameEngine } from './hooks/useGameEngine';
-import { Plus, Volume2, Play, Pause } from 'lucide-react';
-import { CellColor } from './constants';
+import { Plus, Play, Pause } from 'lucide-react';
+import { CellColor, DEFAULT_BPM, GRID_SIZE } from './constants';
 import { InstrumentConfig, InstrumentType } from './types';
-import { resumeAudio } from './utils/audio';
+import { getAudioContext, resumeAudio } from './utils/audio';
 
 // Wrapper component to bind a hook instance to a Launchpad
 const LaunchpadInstance = ({ 
     id, 
     config, 
+    bpm,
+    currentCol,
     isPlaying,
     onTogglePlay,
+    onBpmChange,
     onRemove 
 }: { 
     id: number, 
     config: InstrumentConfig, 
+    bpm: number;
+    currentCol: number;
     isPlaying: boolean,
     onTogglePlay: () => void,
+    onBpmChange: (next: number) => void,
     onRemove: () => void 
 }) => {
   const engine = useGameEngine();
@@ -31,8 +37,11 @@ const LaunchpadInstance = ({
     <Launchpad
       id={id}
       config={config}
+      bpm={bpm}
+      currentCol={currentCol}
       isPlaying={isPlaying}
       onTogglePlay={onTogglePlay}
+      onBpmChange={onBpmChange}
       grid={engine.grid}
       wrapAround={engine.wrapAround}
       onToggleCell={engine.toggleCell}
@@ -54,9 +63,13 @@ function App() {
     { id: 3, config: { type: InstrumentType.Guitar, name: "Guitar", color: CellColor.Cyan } },
   ]);
 
+  const [bpm, setBpm] = useState(DEFAULT_BPM);
+  const [currentCol, setCurrentCol] = useState(-1);
   const [playbackStates, setPlaybackStates] = useState<Record<number, boolean>>({
-    1: true, 2: true, 3: true
+    1: false, 2: false, 3: false
   });
+  const lastStepRef = React.useRef<number | null>(null);
+  const rafRef = React.useRef<number>(0);
 
   // Auto-init audio on mount and interaction
   useEffect(() => {
@@ -80,17 +93,52 @@ function App() {
     };
   }, []);
 
+  // Master transport: single clock drives all launchpads for sync and performance
+  useEffect(() => {
+    lastStepRef.current = null;
+
+    const loop = () => {
+      if (!Object.values(playbackStates).some(Boolean)) return;
+
+      const ctx = getAudioContext();
+      const now = ctx.currentTime;
+      const stepDuration = 60 / bpm / 4;
+
+      if (lastStepRef.current === null) {
+        lastStepRef.current = now;
+      }
+
+      if (now - lastStepRef.current >= stepDuration) {
+        setCurrentCol(prev => {
+          const next = (prev + 1 + GRID_SIZE) % GRID_SIZE;
+          return next;
+        });
+        lastStepRef.current = now;
+      }
+
+      rafRef.current = requestAnimationFrame(loop);
+    };
+
+    rafRef.current = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [playbackStates, bpm]);
+
   const togglePlayback = (id: number) => {
-    setPlaybackStates(prev => ({
-        ...prev,
-        [id]: !prev[id]
-    }));
+    setPlaybackStates(prev => {
+        const nextState = !prev[id];
+        if (nextState) resumeAudio().catch(() => {});
+        return {
+            ...prev,
+            [id]: nextState
+        };
+    });
   };
 
   const isAnyPlaying = Object.values(playbackStates).some(s => s);
   
   const toggleMasterPlayback = () => {
       const newState = !isAnyPlaying;
+      if (newState) resumeAudio().catch(() => {});
       const newStates = { ...playbackStates };
       instances.forEach(inst => {
           newStates[inst.id] = newState;
@@ -112,7 +160,7 @@ function App() {
         }
     }]);
     
-    setPlaybackStates(prev => ({...prev, [nextId]: true}));
+    setPlaybackStates(prev => ({...prev, [nextId]: false}));
   };
 
   const removeLaunchpad = (id: number) => {
@@ -170,8 +218,11 @@ function App() {
                 <LaunchpadInstance 
                     id={inst.id}
                     config={inst.config}
-                    isPlaying={playbackStates[inst.id] ?? true}
+                    bpm={bpm}
+                    currentCol={currentCol}
+                    isPlaying={playbackStates[inst.id] ?? false}
                     onTogglePlay={() => togglePlayback(inst.id)}
+                    onBpmChange={setBpm}
                     onRemove={() => removeLaunchpad(inst.id)}
                 />
             </div>

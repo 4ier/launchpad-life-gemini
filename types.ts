@@ -41,7 +41,6 @@ export interface InstrumentConfig {
 }
 
 export interface InstrumentSettings {
-  bpm: number;
   distortion: number; // 0 to 1
   reverb: number; // 0 to 1
   volume: number; // 0 to 1

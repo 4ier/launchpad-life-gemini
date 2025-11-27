@@ -3,17 +3,20 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Square, Shuffle, Globe, Trash2, Sliders, Play, Pause } from 'lucide-react';
 import { PadButton } from './PadButton';
 import { Knob } from './Knob';
-import { CellColor, PRESETS, GRID_SIZE, DEFAULT_BPM, MIN_BPM, MAX_BPM } from '../constants';
+import { CellColor, PRESETS, GRID_SIZE, MIN_BPM, MAX_BPM } from '../constants';
 import { InstrumentConfig, InstrumentType, GridState, Preset, InstrumentSettings } from '../types';
-import { AudioChannel, getAudioContext } from '../utils/audio';
+import { AudioChannel } from '../utils/audio';
 
 interface LaunchpadProps {
   id: number;
   config: InstrumentConfig;
+  bpm: number;
+  currentCol: number;
   grid: GridState;
   wrapAround: boolean;
   isPlaying: boolean; // From props now
   onTogglePlay: () => void;
+  onBpmChange: (next: number) => void;
   onToggleCell: (x: number, y: number) => void;
   onSetCell: (x: number, y: number, state: boolean) => void;
   onRandomize: () => void;
@@ -27,10 +30,13 @@ interface LaunchpadProps {
 export const Launchpad: React.FC<LaunchpadProps> = ({
   id,
   config,
+  bpm,
+  currentCol,
   grid,
   wrapAround,
   isPlaying,
   onTogglePlay,
+  onBpmChange,
   onToggleCell,
   onSetCell,
   onRandomize,
@@ -42,21 +48,17 @@ export const Launchpad: React.FC<LaunchpadProps> = ({
 }) => {
   // Local Audio Channel
   const audioChannelRef = useRef<AudioChannel | null>(null);
+  const gridRef = useRef<GridState>(grid);
   
   // Local UI State
   const [settings, setSettings] = useState<InstrumentSettings>({
-    bpm: DEFAULT_BPM,
     distortion: 0.0,
     reverb: 0.1,
     volume: 0.7
   });
   const [instrumentType, setInstrumentType] = useState<InstrumentType>(config.type);
 
-  // Sequencer State
-  const [currentCol, setCurrentCol] = useState(-1);
-  const lastNoteTimeRef = useRef(0);
-  const colRef = useRef(-1);
-  const reqRef = useRef<number>(0);
+  const prevColRef = useRef<number>(-1);
   
   // Painting State
   const isDrawingRef = useRef(false);
@@ -78,62 +80,27 @@ export const Launchpad: React.FC<LaunchpadProps> = ({
     }
   }, [settings, instrumentType]);
 
-  // Sync Timer on Play Start to avoid instant catch-up or drift
   useEffect(() => {
-    if (isPlaying) {
-        const ctx = getAudioContext();
-        // Reset lastNoteTime to current time so it plays next note immediately/soon
-        // instead of trying to catch up from seconds ago.
-        lastNoteTimeRef.current = ctx.currentTime;
-    } else {
-        setCurrentCol(-1);
+    gridRef.current = grid;
+  }, [grid]);
+
+  // Respond to master transport ticks
+  useEffect(() => {
+    if (!audioChannelRef.current) return;
+    if (!isPlaying) {
+      prevColRef.current = currentCol;
+      return;
     }
-  }, [isPlaying]);
+    if (currentCol < 0) return;
 
-  // Sequencer Loop
-  useEffect(() => {
-    const loop = () => {
-      if (!isPlaying) {
-        reqRef.current = requestAnimationFrame(loop);
-        return;
-      }
+    audioChannelRef.current.playColumn(currentCol, gridRef.current);
 
-      // CRITICAL FIX: Use singleton context, do NOT create new one
-      const ctx = getAudioContext();
-      const currentTime = ctx.currentTime;
-      const secondsPerBeat = 60.0 / settings.bpm;
-      const stepDuration = secondsPerBeat / 4; // 16th notes
+    if (prevColRef.current === GRID_SIZE - 1 && currentCol === 0) {
+      onStep();
+    }
 
-      // If we are significantly behind (tab background), jump ahead
-      if (currentTime - lastNoteTimeRef.current > stepDuration * 10) {
-          lastNoteTimeRef.current = currentTime;
-      }
-
-      if (currentTime >= lastNoteTimeRef.current + stepDuration) {
-        // Advance column
-        const nextCol = (colRef.current + 1) % GRID_SIZE;
-        colRef.current = nextCol;
-        setCurrentCol(nextCol);
-        
-        // Play Audio
-        if (audioChannelRef.current) {
-          audioChannelRef.current.playColumn(nextCol, grid);
-        }
-
-        // Trigger Game of Life Step at end of loop (when wrapping back to 0)
-        if (nextCol === 0) {
-            onStep();
-        }
-
-        lastNoteTimeRef.current = currentTime;
-      }
-
-      reqRef.current = requestAnimationFrame(loop);
-    };
-
-    reqRef.current = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(reqRef.current);
-  }, [isPlaying, settings.bpm, grid, onStep]);
+    prevColRef.current = currentCol;
+  }, [currentCol, isPlaying, onStep]);
 
 
   // Painting Handlers
@@ -185,7 +152,7 @@ export const Launchpad: React.FC<LaunchpadProps> = ({
                     <option key={t} value={t}>{t}</option>
                 ))}
             </select>
-             <div className="text-[10px] text-gray-500 font-mono">CH-{id} / BPM {settings.bpm}</div>
+             <div className="text-[10px] text-gray-500 font-mono">CH-{id} / BPM {bpm}</div>
         </div>
 
         <div className="flex gap-1 sm:gap-2">
@@ -263,14 +230,14 @@ export const Launchpad: React.FC<LaunchpadProps> = ({
          <div className="flex flex-col justify-center gap-1 px-1 sm:px-2">
             <div className="flex justify-between text-[10px] text-gray-500 uppercase font-bold">
                 <span>Tempo</span>
-                <span>{Math.round(settings.bpm)}</span>
+                <span>{Math.round(bpm)}</span>
             </div>
             <input 
                 type="range" 
                 min={MIN_BPM} 
                 max={MAX_BPM} 
-                value={settings.bpm} 
-                onChange={(e) => setSettings({...settings, bpm: Number(e.target.value)})}
+                value={bpm} 
+                onChange={(e) => onBpmChange(Number(e.target.value))}
                 className="w-full h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-white"
             />
          </div>
