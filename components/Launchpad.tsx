@@ -194,7 +194,7 @@ export const Launchpad: React.FC<LaunchpadProps> = ({
         </div>
 
         {/* Side Presets */}
-        <div className="flex gap-1 sm:gap-2 w-full max-w-[260px] overflow-x-auto px-1 sm:px-2">
+        <div className="flex flex-col gap-1 sm:gap-2 w-8 sm:w-10 max-h-[320px] overflow-y-auto px-1 sm:px-2">
           {PRESETS.slice(1).map((preset, index) => (
             <PadButton
               key={preset.name}
