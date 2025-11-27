@@ -6,6 +6,17 @@ const createEmptyGrid = (): GridState => {
   return Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(false));
 };
 
+// Deterministic PRNG for reproducible randomization (Mulberry32)
+const createRng = (seed: number) => {
+  let t = seed >>> 0;
+  return () => {
+    t += 0x6D2B79F5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+};
+
 export const useGameEngine = () => {
   const [grid, setGrid] = useState<GridState>(createEmptyGrid());
   const [generation, setGeneration] = useState(0);
@@ -45,9 +56,10 @@ export const useGameEngine = () => {
     setGeneration(0);
   };
 
-  const randomize = () => {
-    const newGrid = createEmptyGrid().map(row => 
-      row.map(() => Math.random() > 0.7) 
+  const randomizeWithSeed = (seed?: number) => {
+    const rng = seed === undefined ? Math.random : createRng(seed);
+    const newGrid = createEmptyGrid().map(row =>
+      row.map(() => rng() > 0.7)
     );
     setGrid(newGrid);
     setGeneration(0);
@@ -104,7 +116,7 @@ export const useGameEngine = () => {
     toggleCell,
     setCell,
     loadPreset,
-    randomize,
+    randomize: randomizeWithSeed,
     clear,
     nextStep
   };
