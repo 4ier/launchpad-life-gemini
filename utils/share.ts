@@ -48,7 +48,7 @@ const fromChars = (str: string) => {
 // 3 bits: instrument count (0-4)
 // Per instrument (max 4): 3 bits type, 10 bits seed
 export const encodeShare = (bpm: number, instances: ShareInstance[]) => {
-  const count = Math.min(4, instances.length);
+  const count = Math.min(8, instances.length);
   const safeBpm = clampBpm(bpm);
   let bitsUsed = 0;
   let packed = 0n;
@@ -59,7 +59,7 @@ export const encodeShare = (bpm: number, instances: ShareInstance[]) => {
   };
 
   push(safeBpm - 40, 7);
-  push(count, 3);
+  push(count, 4); // allow up to 8 devices
 
   for (let i = 0; i < count; i++) {
     const inst = instances[i];
@@ -69,13 +69,13 @@ export const encodeShare = (bpm: number, instances: ShareInstance[]) => {
     push(seed, 10);
   }
 
-  // Ensure we have at least 1 bit so encoder works, pad to 60 bits
-  if (bitsUsed < 60) {
+  const targetLength = count <= 4 ? 10 : Math.ceil(bitsUsed / 6);
+  const targetBits = targetLength * 6;
+  if (bitsUsed < targetBits) {
     packed |= 0n << BigInt(bitsUsed);
-    bitsUsed = 60;
   }
 
-  return toChars(packed, 10);
+  return toChars(packed, targetLength);
 };
 
 export const decodeShare = (code: string): { bpm: number; instances: ShareInstance[] } | null => {
@@ -92,7 +92,7 @@ export const decodeShare = (code: string): { bpm: number; instances: ShareInstan
 
   const bpmOffset = pull(7);
   const bpm = clampBpm(40 + bpmOffset);
-  const count = Math.min(4, pull(3));
+  const count = Math.min(8, pull(4));
   const instances: ShareInstance[] = [];
 
   for (let i = 0; i < count; i++) {
