@@ -136,15 +136,17 @@ export class AudioChannel {
   }
 
   private synthesizeNote(index: number, time: number, osc: OscillatorNode, gain: GainNode) {
-    const scales = SCALES[this.type] || SCALES[InstrumentType.Piano];
-    const freq = scales[index % scales.length]; 
+    const rawScale = SCALES[this.type];
+    const scales = rawScale && rawScale.length ? rawScale : SCALES[InstrumentType.Piano];
+    const freq = scales.length ? scales[index % scales.length] : 220;
+    const safeFreq = Number.isFinite(freq) ? freq : 220;
     
     // Glitch uses random frequency modulation
     if (this.type === InstrumentType.Glitch) {
-        osc.frequency.setValueAtTime(freq * (0.5 + Math.random()), time);
-        osc.frequency.linearRampToValueAtTime(freq, time + 0.1);
+        osc.frequency.setValueAtTime(safeFreq * (0.5 + Math.random()), time);
+        osc.frequency.linearRampToValueAtTime(safeFreq, time + 0.1);
     } else {
-        osc.frequency.setValueAtTime(freq, time);
+        osc.frequency.setValueAtTime(safeFreq, time);
     }
 
     switch (this.type) {
