@@ -194,8 +194,8 @@ export const Launchpad: React.FC<LaunchpadProps> = ({
         </div>
 
         {/* Side Presets */}
-        <div className="flex flex-col gap-1 sm:gap-2 w-6 sm:w-8 justify-center">
-          {PRESETS.slice(1, 6).map((preset, index) => (
+        <div className="grid grid-cols-2 gap-1 sm:gap-2 w-16 sm:w-20 content-start">
+          {PRESETS.slice(1).map((preset, index) => (
             <PadButton
               key={preset.name}
               color={CellColor.White}
@@ -203,7 +203,7 @@ export const Launchpad: React.FC<LaunchpadProps> = ({
               isCircle
               onClick={() => onLoadPreset(preset)}
               label={`Load ${preset.name}`}
-              className="!w-6 !h-6 sm:!w-8 sm:!h-8 text-[8px] sm:text-[10px] font-bold text-black"
+              className="!w-7 !h-7 sm:!w-9 sm:!h-9 text-[8px] sm:text-[10px] font-bold text-black"
               icon={<span>{index + 1}</span>}
             />
           ))}
