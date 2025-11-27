@@ -1,0 +1,5 @@
+{
+  "name": "Launchpad Life",
+  "description": "A Game of Life simulation running on a virtual Novation-style Launchpad controller with authentic aesthetics and tactile controls.",
+  "requestFramePermissions": []
+}
